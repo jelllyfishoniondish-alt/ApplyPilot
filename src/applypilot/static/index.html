@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ApplyPilot</title>
+    <link rel="stylesheet" href="/static/styles.css?v=20260528-timeline" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="ApplyPilot home">
+        <span class="brand-mark">A</span>
+        <span>ApplyPilot</span>
+      </a>
+      <nav class="nav" aria-label="Primary">
+        <a href="/" data-nav="analyze">Analyze</a>
+        <a href="/dashboard" data-nav="dashboard">Dashboard</a>
+      </nav>
+    </header>
+
+    <main>
+      <section id="analyze-view" class="view analyze-layout">
+        <div class="workspace">
+          <div class="section-heading">
+            <p class="eyebrow">Job analysis</p>
+            <h1>Analyze a job posting and build an application plan.</h1>
+          </div>
+
+          <section class="profile-section" aria-labelledby="profile-heading">
+            <div class="subsection-heading profile-heading-row">
+              <div>
+                <p class="eyebrow">Candidate profile</p>
+                <h2 id="profile-heading">Profile keywords</h2>
+              </div>
+              <div class="profile-controls">
+                <span id="profile-save-status" class="profile-save-status"></span>
+                <button id="clear-profile-btn" type="button" class="profile-clear-btn">Clear</button>
+              </div>
+            </div>
+
+            <div class="field-grid">
+              <label>
+                <span>Target roles</span>
+                <input id="target-roles-input" class="text-input preset-input" data-preset="targetRoles" placeholder="Product manager, Data analyst, Marketing associate" autocomplete="off" />
+              </label>
+              <label>
+                <span>Core skills</span>
+                <input id="core-skills-input" class="text-input preset-input" data-preset="coreSkills" placeholder="Market research, Python, communication" autocomplete="off" />
+              </label>
+              <label>
+                <span>Tools</span>
+                <input id="tools-input" class="text-input preset-input" data-preset="tools" placeholder="Excel, PowerPoint, Salesforce, Figma" autocomplete="off" />
+              </label>
+              <label>
+                <span>Domain interests</span>
+                <input id="domains-input" class="text-input preset-input" data-preset="domains" placeholder="AI, finance, healthcare, education" autocomplete="off" />
+              </label>
+            </div>
+
+            <label class="block-field">
+              <span>Evidence / achievements</span>
+              <textarea id="evidence-input" class="small-textarea preset-input" data-preset="evidence" placeholder="Conducted user interviews&#10;Built a market research deck&#10;Created an ML pipeline"></textarea>
+            </label>
+
+            <div class="field-grid">
+              <label>
+                <span>Degree level</span>
+                <input id="degree-input" class="text-input preset-input" data-preset="degreeLevels" placeholder="Bachelor, Master, Engineering degree" autocomplete="off" />
+              </label>
+              <label>
+                <span>Study field</span>
+                <input id="study-field-input" class="text-input preset-input" data-preset="studyFields" placeholder="Computer science, finance, marketing" autocomplete="off" />
+              </label>
+              <label>
+                <span>Certifications</span>
+                <input id="certifications-input" class="text-input preset-input" data-preset="certifications" placeholder="Google Cloud, TOEIC, Scrum" autocomplete="off" />
+              </label>
+              <label>
+                <span>Preferred locations</span>
+                <input id="locations-input" class="text-input preset-input" data-preset="locations" placeholder="Paris, Ile-de-France, Shanghai" autocomplete="off" />
+              </label>
+              <label>
+                <span>Constraints</span>
+                <input id="constraints-input" class="text-input preset-input" data-preset="constraints" placeholder="Internship, hybrid, French, visa-aware" autocomplete="off" />
+              </label>
+            </div>
+          </section>
+
+          <div class="input-tabs" aria-label="Job input mode">
+            <button id="url-mode-button" class="mode-button active" type="button">
+              URL
+            </button>
+            <button id="text-mode-button" class="mode-button" type="button">
+              Text
+            </button>
+          </div>
+
+          <div id="url-panel" class="input-panel">
+            <label class="jd-label" for="url-input">Job posting URL</label>
+            <input
+              id="url-input"
+              class="url-input"
+              type="url"
+              placeholder="https://company.com/careers/jobs/..."
+              autocomplete="off"
+            />
+          </div>
+
+          <div id="text-panel" class="input-panel hidden">
+            <label class="jd-label" for="jd-input">Job description</label>
+          <textarea
+            id="jd-input"
+            spellcheck="true"
+            placeholder="Paste the full job description here..."
+          ></textarea>
+          </div>
+
+          <div class="actions">
+            <button id="analyze-button" class="primary-button" type="button">
+              Analyze
+            </button>
+            <button id="save-button" class="secondary-button" type="button" disabled>
+              Save
+            </button>
+            <span id="status-text" class="status-text" role="status"></span>
+          </div>
+        </div>
+
+        <aside class="results-panel" aria-live="polite">
+          <div id="empty-state" class="empty-state">
+            <p class="eyebrow">Result</p>
+            <h2>Waiting for a job posting.</h2>
+          </div>
+
+          <div id="result-content" class="result-content hidden">
+            <div class="result-header">
+              <div>
+                <p id="result-company" class="eyebrow"></p>
+                <h2 id="result-title"></h2>
+                <span id="analysis-source" class="source-badge"></span>
+              </div>
+              <div class="score-ring">
+                <span id="fit-score">0</span>
+                <small>fit</small>
+              </div>
+            </div>
+
+            <div class="metric-grid">
+              <div>
+                <span>Matched</span>
+                <strong id="matched-count">0</strong>
+              </div>
+              <div>
+                <span>Missing</span>
+                <strong id="missing-count">0</strong>
+              </div>
+            </div>
+
+            <section class="result-block">
+              <h3>Matched skills</h3>
+              <div id="matched-skills" class="chip-row"></div>
+            </section>
+
+            <section class="result-block">
+              <h3>Missing skills</h3>
+              <div id="missing-skills" class="chip-row"></div>
+            </section>
+
+            <section class="result-block">
+              <h3>Next steps</h3>
+              <ol id="steps-list"></ol>
+            </section>
+          </div>
+        </aside>
+      </section>
+
+      <section id="dashboard-view" class="view dashboard-layout hidden">
+        <div class="section-heading dashboard-heading">
+          <p class="eyebrow">Dashboard</p>
+          <h1>Saved jobs</h1>
+        </div>
+        <div id="jobs-list" class="jobs-list"></div>
+      </section>
+    </main>
+
+    <script src="/static/app.js?v=20260528-timeline" defer></script>
+  </body>
+</html>
