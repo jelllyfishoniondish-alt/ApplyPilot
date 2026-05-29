@@ -11,3 +11,5 @@ services:
         sync: false          # set in Render dashboard
       - key: MONGODB_URI
         sync: false          # set in Render dashboard
+      - key: JWT_SECRET_KEY
+        sync: false          # set in Render dashboard — use a long random string

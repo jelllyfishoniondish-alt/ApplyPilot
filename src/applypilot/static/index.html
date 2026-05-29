@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ApplyPilot</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260528-timeline" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260529-auth" />
   </head>
   <body>
     <header class="topbar">
@@ -16,6 +16,10 @@
         <a href="/" data-nav="analyze">Analyze</a>
         <a href="/dashboard" data-nav="dashboard">Dashboard</a>
       </nav>
+      <div id="user-info" class="user-info hidden">
+        <span id="user-email-display" class="user-email-display"></span>
+        <button id="logout-btn" type="button" class="logout-btn">Log out</button>
+      </div>
     </header>
 
     <main>
@@ -183,6 +187,31 @@
       </section>
     </main>
 
-    <script src="/static/app.js?v=20260528-timeline" defer></script>
+    <div id="auth-overlay" class="auth-overlay">
+      <div class="auth-card">
+        <div class="auth-brand">
+          <span class="brand-mark">A</span>
+          <span>ApplyPilot</span>
+        </div>
+        <div class="auth-tabs">
+          <button id="tab-login" class="auth-tab active" type="button">Log in</button>
+          <button id="tab-register" class="auth-tab" type="button">Create account</button>
+        </div>
+        <div class="auth-fields">
+          <label class="auth-label">
+            Email
+            <input id="auth-email" type="email" class="text-input auth-input" placeholder="you@example.com" autocomplete="email" />
+          </label>
+          <label class="auth-label">
+            Password
+            <input id="auth-password" type="password" class="text-input auth-input" placeholder="At least 6 characters" autocomplete="current-password" />
+          </label>
+        </div>
+        <button id="auth-submit" type="button" class="primary-button auth-submit-btn">Log in</button>
+        <p id="auth-error" class="auth-error"></p>
+      </div>
+    </div>
+
+    <script src="/static/app.js?v=20260529-auth" defer></script>
   </body>
 </html>

@@ -118,46 +118,58 @@ def save_job(record: dict) -> dict:
     return record
 
 
-def list_jobs() -> list[dict]:
-    """Return all saved jobs, newest first."""
+def list_jobs(user_id: str | None = None) -> list[dict]:
+    """Return saved jobs for user_id (all jobs if None), newest first."""
     db = _get_db()
     if db is not None:
         try:
-            cursor = db["jobs"].find({}, {"_id": 0}).sort("saved_at", -1)
+            query = {"user_id": user_id} if user_id else {}
+            cursor = db["jobs"].find(query, {"_id": 0}).sort("saved_at", -1)
             return list(cursor)
         except Exception as exc:
             print(f"[ApplyPilot] MongoDB find failed ({exc}); using file store.")
 
     jobs = _load_json_store()
+    if user_id:
+        jobs = [j for j in jobs if j.get("user_id") == user_id]
     return list(reversed(jobs))
 
 
-def delete_job(job_id: str) -> bool:
-    """Delete a job by id. Returns True if deleted, False if not found."""
+def delete_job(job_id: str, user_id: str | None = None) -> bool:
+    """Delete a job by id (scoped to user_id when provided)."""
     db = _get_db()
     if db is not None:
         try:
-            result = db["jobs"].delete_one({"id": job_id})
+            query: dict = {"id": job_id}
+            if user_id:
+                query["user_id"] = user_id
+            result = db["jobs"].delete_one(query)
             return result.deleted_count > 0
         except Exception as exc:
             print(f"[ApplyPilot] MongoDB delete failed ({exc}); using file store.")
 
     jobs = _load_json_store()
-    new_jobs = [j for j in jobs if j.get("id") != job_id]
+    new_jobs = [
+        j for j in jobs
+        if not (j.get("id") == job_id and (not user_id or j.get("user_id") == user_id))
+    ]
     if len(new_jobs) == len(jobs):
         return False
     _save_json_store(new_jobs)
     return True
 
 
-def update_job(job_id: str, updates: dict) -> dict | None:
-    """Update fields on a job record. Returns updated record or None if not found."""
+def update_job(job_id: str, updates: dict, user_id: str | None = None) -> dict | None:
+    """Update fields on a job record (scoped to user_id when provided)."""
     db = _get_db()
     if db is not None:
         try:
             from pymongo import ReturnDocument
+            query: dict = {"id": job_id}
+            if user_id:
+                query["user_id"] = user_id
             result = db["jobs"].find_one_and_update(
-                {"id": job_id},
+                query,
                 {"$set": updates},
                 return_document=ReturnDocument.AFTER,
             )
@@ -169,8 +181,82 @@ def update_job(job_id: str, updates: dict) -> dict | None:
 
     jobs = _load_json_store()
     for i, job in enumerate(jobs):
-        if job.get("id") == job_id:
+        if job.get("id") == job_id and (not user_id or job.get("user_id") == user_id):
             jobs[i] = {**job, **updates}
             _save_json_store(jobs)
             return jobs[i]
     return None
+
+
+# ---------------------------------------------------------------------------
+# User management
+# ---------------------------------------------------------------------------
+
+def _users_json_path() -> Path:
+    here = Path(__file__).resolve()
+    project_root = here.parent.parent.parent
+    return project_root / "users.json"
+
+
+def _load_users_store() -> list[dict]:
+    p = _users_json_path()
+    if not p.exists():
+        return []
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _save_users_store(users: list[dict]) -> None:
+    try:
+        _users_json_path().write_text(
+            json.dumps(users, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as exc:
+        print(f"[ApplyPilot] users.json write failed: {exc}")
+
+
+def create_user(email: str, hashed_password: str) -> dict:
+    """Persist a new user. Returns the saved dict."""
+    from uuid import uuid4
+    user: dict = {
+        "id": str(uuid4()),
+        "email": email,
+        "hashed_password": hashed_password,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    db = _get_db()
+    if db is not None:
+        try:
+            db["users"].insert_one({**user})
+            user.pop("_id", None)
+            return user
+        except Exception as exc:
+            print(f"[ApplyPilot] MongoDB user insert failed ({exc}); using file store.")
+    users = _load_users_store()
+    users.append(user)
+    _save_users_store(users)
+    return user
+
+
+def get_user_by_email(email: str) -> dict | None:
+    db = _get_db()
+    if db is not None:
+        try:
+            return db["users"].find_one({"email": email}, {"_id": 0}) or None
+        except Exception as exc:
+            print(f"[ApplyPilot] MongoDB user lookup failed ({exc}); using file store.")
+    return next((u for u in _load_users_store() if u.get("email") == email), None)
+
+
+def get_user_by_id(user_id: str) -> dict | None:
+    db = _get_db()
+    if db is not None:
+        try:
+            return db["users"].find_one({"id": user_id}, {"_id": 0}) or None
+        except Exception as exc:
+            print(f"[ApplyPilot] MongoDB user lookup failed ({exc}); using file store.")
+    return next((u for u in _load_users_store() if u.get("id") == user_id), None)

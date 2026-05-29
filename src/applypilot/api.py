@@ -9,13 +9,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .agent import ApplyPilotAgent
+from .auth import create_token, decode_token, hash_password, verify_password
+from .db import create_user as db_create_user
 from .db import delete_job as db_delete_job
+from .db import get_user_by_email as db_get_user_by_email
+from .db import get_user_by_id as db_get_user_by_id
 from .db import list_jobs as db_list_jobs
 from .db import save_job as db_save_job
 from .db import storage_mode
@@ -94,6 +98,16 @@ class AnalyzeJobRequest(BaseModel):
     job: JobRequest
 
 
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
 @app.get("/", include_in_schema=False)
 def index() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
@@ -104,8 +118,49 @@ def dashboard() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
 
 
+# ── Auth ──────────────────────────────────────────────────────────────────────
+
+async def get_current_user(request: Request) -> dict:
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    user_id = decode_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    user = db_get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
+
+@app.post("/auth/register", status_code=201)
+async def register(body: RegisterRequest) -> dict:
+    if len(body.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    if not body.email or "@" not in body.email:
+        raise HTTPException(status_code=400, detail="Invalid email address")
+    if db_get_user_by_email(body.email.lower()):
+        raise HTTPException(status_code=409, detail="Email already registered")
+    user = db_create_user(body.email.lower(), hash_password(body.password))
+    return {"token": create_token(user["id"]), "email": user["email"]}
+
+
+@app.post("/auth/login")
+async def login(body: LoginRequest) -> dict:
+    user = db_get_user_by_email(body.email.lower())
+    if not user or not verify_password(body.password, user.get("hashed_password", "")):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    return {"token": create_token(user["id"]), "email": user["email"]}
+
+
+@app.get("/auth/me")
+async def me(current_user: dict = Depends(get_current_user)) -> dict:
+    return {"id": current_user["id"], "email": current_user["email"]}
+
+
 @app.post("/analyze-job")
-async def analyze_job(request: AnalyzeJobRequest) -> StreamingResponse:
+async def analyze_job(request: AnalyzeJobRequest, _: dict = Depends(get_current_user)) -> StreamingResponse:
     """Analyze one job against one user profile. Returns SSE stream with status events."""
     import asyncio
     from concurrent.futures import ThreadPoolExecutor
@@ -206,23 +261,25 @@ def _sse(data: dict) -> str:
 
 
 @app.get("/jobs")
-async def list_jobs(request: Request) -> dict:
-    """Return all persisted job records, newest first."""
+async def list_jobs(request: Request, current_user: dict = Depends(get_current_user)) -> dict:
+    """Return all persisted job records for the current user, newest first."""
+    user_id = current_user["id"]
     mcp = request.app.state.mcp
     if mcp.is_connected:
         try:
-            jobs = await mcp.find("jobs", sort={"saved_at": -1})
+            jobs = await mcp.find("jobs", filter={"user_id": user_id}, sort={"saved_at": -1})
             return {"jobs": jobs, "storage": "mcp"}
         except Exception as exc:
             print(f"[ApplyPilot] MCP find failed ({exc}); falling back.")
-    return {"jobs": db_list_jobs(), "storage": storage_mode()}
+    return {"jobs": db_list_jobs(user_id), "storage": storage_mode()}
 
 
 @app.post("/jobs", status_code=201)
-async def create_job(job: SaveJobRequest, request: Request) -> dict:
+async def create_job(job: SaveJobRequest, request: Request, current_user: dict = Depends(get_current_user)) -> dict:
     """Persist a job posting (with its analysis) via MongoDB MCP or file fallback."""
     record = {
         "id": str(uuid4()),
+        "user_id": current_user["id"],
         "company": job.company,
         "title": job.title,
         "source_url": job.source_url,
@@ -244,11 +301,12 @@ async def create_job(job: SaveJobRequest, request: Request) -> dict:
 
 
 @app.delete("/jobs/{job_id}", status_code=204)
-async def delete_job(job_id: str, request: Request) -> None:
+async def delete_job(job_id: str, request: Request, current_user: dict = Depends(get_current_user)) -> None:
+    user_id = current_user["id"]
     mcp = request.app.state.mcp
     if mcp.is_connected:
         try:
-            deleted = await mcp.delete_one("jobs", {"id": job_id})
+            deleted = await mcp.delete_one("jobs", {"id": job_id, "user_id": user_id})
             if not deleted:
                 raise HTTPException(status_code=404, detail="Job not found")
             return
@@ -256,19 +314,20 @@ async def delete_job(job_id: str, request: Request) -> None:
             raise
         except Exception as exc:
             print(f"[ApplyPilot] MCP delete failed ({exc}); falling back.")
-    if not db_delete_job(job_id):
+    if not db_delete_job(job_id, user_id):
         raise HTTPException(status_code=404, detail="Job not found")
 
 
 @app.patch("/jobs/{job_id}")
-async def update_job(job_id: str, body: UpdateJobRequest, request: Request) -> dict:
+async def update_job(job_id: str, body: UpdateJobRequest, request: Request, current_user: dict = Depends(get_current_user)) -> dict:
+    user_id = current_user["id"]
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
     mcp = request.app.state.mcp
     if mcp.is_connected:
         try:
-            updated = await mcp.update_one("jobs", {"id": job_id}, {"$set": updates})
+            updated = await mcp.update_one("jobs", {"id": job_id, "user_id": user_id}, {"$set": updates})
             if updated is None:
                 raise HTTPException(status_code=404, detail="Job not found")
             return updated
@@ -276,7 +335,7 @@ async def update_job(job_id: str, body: UpdateJobRequest, request: Request) -> d
             raise
         except Exception as exc:
             print(f"[ApplyPilot] MCP update failed ({exc}); falling back.")
-    updated = db_update_job(job_id, updates)
+    updated = db_update_job(job_id, updates, user_id)
     if updated is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return updated

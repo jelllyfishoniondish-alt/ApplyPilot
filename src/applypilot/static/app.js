@@ -4,6 +4,127 @@ const state = {
   lastPlan: null,
 };
 
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+const TOKEN_KEY = "applypilot_token";
+const EMAIL_KEY = "applypilot_email";
+
+const authState = { token: null, email: null };
+
+async function apiFetch(url, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (authState.token) headers["Authorization"] = `Bearer ${authState.token}`;
+  const res = await fetch(url, { ...options, headers });
+  if (res.status === 401) {
+    clearAuthState();
+    showAuthOverlay();
+    throw new Error("Session expired. Please log in again.");
+  }
+  return res;
+}
+
+function setAuthState(token, email) {
+  authState.token = token;
+  authState.email = email;
+  try { localStorage.setItem(TOKEN_KEY, token); localStorage.setItem(EMAIL_KEY, email); } catch {}
+}
+
+function clearAuthState() {
+  authState.token = null;
+  authState.email = null;
+  try { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(EMAIL_KEY); } catch {}
+}
+
+function showAuthOverlay() {
+  elements.authOverlay?.classList.remove("hidden");
+  elements.userInfo?.classList.add("hidden");
+}
+
+function hideAuthOverlay() {
+  elements.authOverlay?.classList.add("hidden");
+  elements.userInfo?.classList.remove("hidden");
+  if (elements.userEmailDisplay) elements.userEmailDisplay.textContent = authState.email || "";
+}
+
+async function checkAuth() {
+  const storedToken = localStorage.getItem(TOKEN_KEY);
+  if (!storedToken) { showAuthOverlay(); return false; }
+  authState.token = storedToken;
+  authState.email = localStorage.getItem(EMAIL_KEY) || "";
+  try {
+    const res = await fetch("/auth/me", { headers: { Authorization: `Bearer ${storedToken}` } });
+    if (!res.ok) throw new Error();
+    hideAuthOverlay();
+    return true;
+  } catch {
+    clearAuthState();
+    showAuthOverlay();
+    return false;
+  }
+}
+
+async function submitAuth() {
+  const email = elements.authEmail?.value.trim();
+  const password = elements.authPassword?.value;
+  const mode = elements.authOverlay?.dataset.mode || "login";
+  if (!email || !password) { setAuthError("Email and password are required."); return; }
+  setAuthError("");
+  elements.authSubmit.disabled = true;
+  elements.authSubmit.textContent = mode === "login" ? "Logging in…" : "Creating account…";
+  try {
+    const res = await fetch(mode === "login" ? "/auth/login" : "/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Request failed");
+    setAuthState(data.token, data.email);
+    hideAuthOverlay();
+    bindEvents();
+    renderRoute();
+    loadProfileFromStorage();
+  } catch (err) {
+    setAuthError(err.message);
+  } finally {
+    elements.authSubmit.disabled = false;
+    elements.authSubmit.textContent = mode === "login" ? "Log in" : "Create account";
+  }
+}
+
+function setAuthError(msg) {
+  if (elements.authError) elements.authError.textContent = msg;
+}
+
+function logout() {
+  clearAuthState();
+  state.lastJob = null;
+  state.lastPlan = null;
+  showAuthOverlay();
+}
+
+function bindAuthEvents() {
+  elements.tabLogin?.addEventListener("click", () => {
+    elements.authOverlay.dataset.mode = "login";
+    elements.tabLogin.classList.add("active");
+    elements.tabRegister.classList.remove("active");
+    if (elements.authSubmit) elements.authSubmit.textContent = "Log in";
+    if (elements.authPassword) elements.authPassword.autocomplete = "current-password";
+    setAuthError("");
+  });
+  elements.tabRegister?.addEventListener("click", () => {
+    elements.authOverlay.dataset.mode = "register";
+    elements.tabRegister.classList.add("active");
+    elements.tabLogin.classList.remove("active");
+    if (elements.authSubmit) elements.authSubmit.textContent = "Create account";
+    if (elements.authPassword) elements.authPassword.autocomplete = "new-password";
+    setAuthError("");
+  });
+  elements.authSubmit?.addEventListener("click", submitAuth);
+  elements.authPassword?.addEventListener("keydown", (e) => { if (e.key === "Enter") submitAuth(); });
+  elements.logoutBtn?.addEventListener("click", logout);
+}
+
 const presetCatalog = {
   targetRoles: {
     label: "Target roles",
@@ -147,9 +268,14 @@ const elements = {};
 
 document.addEventListener("DOMContentLoaded", () => {
   cacheElements();
-  renderRoute();
-  bindEvents();          // initialises preset fields first
-  loadProfileFromStorage(); // then restores saved values + refreshes tag strips
+  bindAuthEvents();
+  checkAuth().then((authenticated) => {
+    if (authenticated) {
+      bindEvents();
+      renderRoute();
+      loadProfileFromStorage();
+    }
+  });
 });
 
 function cacheElements() {
@@ -188,6 +314,16 @@ function cacheElements() {
   elements.jobsList           = document.querySelector("#jobs-list");
   elements.profileSaveStatus  = document.querySelector("#profile-save-status");
   elements.clearProfileBtn    = document.querySelector("#clear-profile-btn");
+  elements.authOverlay        = document.querySelector("#auth-overlay");
+  elements.authEmail          = document.querySelector("#auth-email");
+  elements.authPassword       = document.querySelector("#auth-password");
+  elements.authSubmit         = document.querySelector("#auth-submit");
+  elements.authError          = document.querySelector("#auth-error");
+  elements.tabLogin           = document.querySelector("#tab-login");
+  elements.tabRegister        = document.querySelector("#tab-register");
+  elements.userInfo           = document.querySelector("#user-info");
+  elements.userEmailDisplay   = document.querySelector("#user-email-display");
+  elements.logoutBtn          = document.querySelector("#logout-btn");
 }
 
 function bindEvents() {
@@ -641,7 +777,7 @@ async function analyzeJob() {
   setBusy(true, state.inputMode === "url" ? "Fetching job page…" : "Analyzing…");
 
   try {
-    const response = await fetch("/analyze-job", {
+    const response = await apiFetch("/analyze-job", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ profile, job }),
@@ -716,7 +852,7 @@ async function handleStatusChange(id, newStatus) {
 async function deleteJob(id) {
   if (!confirm("Delete this job?")) return;
   try {
-    const res = await fetch(`/jobs/${id}`, { method: "DELETE" });
+    const res = await apiFetch(`/jobs/${id}`, { method: "DELETE" });
     if (!res.ok) throw new Error(`Delete failed (${res.status})`);
     await loadJobs();
   } catch (err) {
@@ -726,7 +862,7 @@ async function deleteJob(id) {
 
 async function updateJob(id, updates) {
   try {
-    const res = await fetch(`/jobs/${id}`, {
+    const res = await apiFetch(`/jobs/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(updates),
@@ -749,7 +885,7 @@ async function saveJob() {
   try {
     // Include the full analysis result so the dashboard can show fit scores.
     const payload = { ...state.lastJob, analysis: state.lastPlan || {} };
-    const response = await fetch("/jobs", {
+    const response = await apiFetch("/jobs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -772,7 +908,7 @@ async function loadJobs() {
   elements.jobsList.innerHTML = '<div class="empty-list">Loading saved jobs…</div>';
 
   try {
-    const response = await fetch("/jobs");
+    const response = await apiFetch("/jobs");
     if (!response.ok) throw new Error(`Load failed with ${response.status}`);
 
     const body = await response.json();
@@ -854,7 +990,7 @@ function buildCandidateProfile() {
   }
 
   return {
-    user_id: "local-user",
+    user_id: authState.email || "local-user",
     headline: targetRoles.length ? targetRoles.join(", ") : "Candidate",
     target_roles: targetRoles,
     core_skills: coreSkills,

@@ -10,4 +10,5 @@ dist/
 build/
 *.egg-info/
 jobs.json
+users.json
 .claude/
