@@ -3,7 +3,7 @@ version: 0.1.0
 model:
   provider: google
   family: gemini
-  target: gemini-3
+  target: gemini-2.5-flash
 partner_track: mongodb
 partner_mcp:
   name: mongodb
@@ -55,11 +55,7 @@ tools:
   - name: user_approval
     actions:
       - request_confirmation
-  - name: document_generator
-    actions:
-      - draft_resume_changes
-      - draft_cover_letter
-      - create_application_checklist
+  # document_generator (draft_resume_changes, draft_cover_letter) — roadmap, not yet implemented
 memory_schema:
   profiles:
     purpose: Approved reusable user facts, skills, projects, education, preferences.

@@ -32,12 +32,20 @@ config/
 devpost/
   PROJECT.md                 Submission draft: pitch, impact, demo flow
 src/applypilot/
-  agent.py                   Core planning agent
-  models.py                  Domain models
-  tools.py                   Tool abstractions and MongoDB MCP call planner
-  demo.py                    Local demo entry point
+  models.py                  Domain models (UserProfile, JobPosting, ApplicationPlan, …)
+  agent.py                   Deterministic fit-scoring and planning agent
+  gemini.py                  Gemini-backed analyzer with fallback to agent.py
+  api.py                     FastAPI server: /analyze-job (SSE), /jobs CRUD, static UI
+  db.py                      Three-tier persistence: MongoDB → JSON file → in-process
+  db_mcp.py                  MongoDB MCP async client (stdio transport)
+  job_fetcher.py             Fetch and strip HTML from public job posting URLs
+  tools.py                   MongoDB MCP operation builder (used by demo/tests)
+  demo.py                    Offline demo — no LLM or database required
+  static/                    Single-page UI (index.html, app.js, styles.css)
 tests/
-  test_applypilot.py         Standard-library unit tests
+  test_applypilot.py         Unit tests for agent and models
+  test_api.py                API endpoint tests
+  test_gemini.py             Gemini analyzer tests
 ```
 
 ## Quick Local Demo
