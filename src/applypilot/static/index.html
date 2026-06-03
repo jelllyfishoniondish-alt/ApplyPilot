@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ApplyPilot</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260529-auth" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260603-agent" />
   </head>
   <body>
     <header class="topbar">
@@ -141,9 +141,12 @@
               <div>
                 <p id="result-company" class="eyebrow"></p>
                 <h2 id="result-title"></h2>
-                <span id="analysis-source" class="source-badge"></span>
+                <div class="result-badges">
+                  <span id="analysis-source" class="source-badge"></span>
+                  <span id="decision-badge" class="decision-badge hidden"></span>
+                </div>
               </div>
-              <div class="score-ring">
+              <div class="score-ring" id="score-ring">
                 <span id="fit-score">0</span>
                 <small>fit</small>
               </div>
@@ -160,6 +163,11 @@
               </div>
             </div>
 
+            <section class="result-block" id="application-angle-block" style="display:none">
+              <h3>Application angle</h3>
+              <p id="application-angle" class="application-angle"></p>
+            </section>
+
             <section class="result-block">
               <h3>Matched skills</h3>
               <div id="matched-skills" class="chip-row"></div>
@@ -168,6 +176,21 @@
             <section class="result-block">
               <h3>Missing skills</h3>
               <div id="missing-skills" class="chip-row"></div>
+            </section>
+
+            <section class="result-block" id="risk-flags-block" style="display:none">
+              <h3>Risk flags</h3>
+              <ul id="risk-flags-list" class="risk-list"></ul>
+            </section>
+
+            <section class="result-block" id="cv-keywords-block" style="display:none">
+              <h3>CV keywords</h3>
+              <div id="cv-keywords" class="chip-row"></div>
+            </section>
+
+            <section class="result-block" id="cover-letter-block" style="display:none">
+              <h3>Cover letter talking points</h3>
+              <ul id="cover-letter-list" class="cover-letter-list"></ul>
             </section>
 
             <section class="result-block">
@@ -182,6 +205,29 @@
         <div class="section-heading dashboard-heading">
           <p class="eyebrow">Dashboard</p>
           <h1>Saved jobs</h1>
+        </div>
+        <div class="dashboard-controls">
+          <div class="filter-bar">
+            <label class="filter-label">
+              Status
+              <select id="filter-status" class="filter-select">
+                <option value="">All</option>
+                <option value="planned">Saved</option>
+                <option value="applied">Applied</option>
+                <option value="interview_1">1st Interview</option>
+                <option value="interview_2">2nd Interview</option>
+                <option value="offer">Offer</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </label>
+            <label class="filter-label">
+              Sort by
+              <select id="sort-by" class="filter-select">
+                <option value="saved_at">Date saved</option>
+                <option value="fit_score">Fit score</option>
+              </select>
+            </label>
+          </div>
         </div>
         <div id="jobs-list" class="jobs-list"></div>
       </section>
@@ -212,6 +258,6 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=20260529-auth" defer></script>
+    <script src="/static/app.js?v=20260603-agent" defer></script>
   </body>
 </html>

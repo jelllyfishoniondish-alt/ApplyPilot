@@ -196,6 +196,7 @@ async def analyze_job(request: AnalyzeJobRequest, _: dict = Depends(get_current_
                 result["analysis_source"] = "local_fallback"
                 result["fallback_reason"] = str(exc)
                 result["cache_hit"] = False
+                result.update(_derive_extras(result))
                 yield _sse({"status": "done", "result": result})
                 return
 
@@ -218,12 +219,14 @@ async def analyze_job(request: AnalyzeJobRequest, _: dict = Depends(get_current_
                 result["job"] = _job_to_dict(job)
                 result["analysis_source"] = "gemini"
                 result["model"] = analysis.model
+                result.update(analysis.extras)
             except GeminiAnalyzerError as exc:
                 plan = agent.create_application_plan(profile=profile, job=job)
                 result = _plan_to_dict(plan)
                 result["job"] = _job_to_dict(job)
                 result["analysis_source"] = "local_fallback"
                 result["fallback_reason"] = str(exc)
+                result.update(_derive_extras(result))
 
             result["cache_hit"] = False
             analysis_cache[cache_key] = json.loads(json.dumps(result))
@@ -426,6 +429,19 @@ def _unique_items(items: list[str]) -> list[str]:
             seen.add(key)
             result.append(cleaned)
     return result
+
+
+def _derive_extras(result: dict) -> dict:
+    """Derive agent-loop extras from a local-fallback result when Gemini is unavailable."""
+    score = result.get("fit", {}).get("score", 0)
+    action = "apply" if score >= 70 else "maybe" if score >= 45 else "skip"
+    matched = result.get("fit", {}).get("matched_skills", [])
+    return {
+        "recommended_action": action,
+        "application_angle": "",
+        "cv_keywords": matched[:6],
+        "cover_letter_bullets": [],
+    }
 
 
 def _analysis_cache_key(profile: UserProfile, job: JobPosting, model: str) -> str:

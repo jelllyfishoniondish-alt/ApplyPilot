@@ -24,6 +24,7 @@ class GeminiAnalyzerError(RuntimeError):
 class GeminiAnalysis:
     plan: ApplicationPlan
     model: str
+    extras: dict  # recommended_action, application_angle, cv_keywords, cover_letter_bullets
 
 
 class GeminiAnalyzer:
@@ -74,10 +75,11 @@ class GeminiAnalyzer:
             )
             payload = json.loads(response.text or "{}")
             plan = _payload_to_plan(profile, job, payload, self._mcp_planner)
+            extras = _extract_extras(payload)
         except Exception as exc:
             raise GeminiAnalyzerError(str(exc)) from exc
 
-        return GeminiAnalysis(plan=plan, model=self.model)
+        return GeminiAnalysis(plan=plan, model=self.model, extras=extras)
 
 
 RESPONSE_SCHEMA: dict[str, Any] = {
@@ -90,6 +92,11 @@ RESPONSE_SCHEMA: dict[str, Any] = {
         "missing_skills": {"type": "ARRAY", "items": {"type": "STRING"}},
         "risks": {"type": "ARRAY", "items": {"type": "STRING"}},
         "steps": {"type": "ARRAY", "items": {"type": "STRING"}},
+        # Agent-loop extras
+        "recommended_action": {"type": "STRING"},
+        "application_angle": {"type": "STRING"},
+        "cv_keywords": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "cover_letter_bullets": {"type": "ARRAY", "items": {"type": "STRING"}},
     },
     "required": [
         "company",
@@ -99,6 +106,10 @@ RESPONSE_SCHEMA: dict[str, Any] = {
         "missing_skills",
         "risks",
         "steps",
+        "recommended_action",
+        "application_angle",
+        "cv_keywords",
+        "cover_letter_bullets",
     ],
 }
 
@@ -141,9 +152,21 @@ def _build_prompt(profile: UserProfile, job: JobPosting) -> str:
         job_payload["nice_to_have_skills"] = list(job.nice_to_have_skills)
 
     return (
-        "You are ApplyPilot. Extract the company name and job title from the description "
-        "(return them in the company and title fields). Then score job fit, list "
-        "matched/missing skills, flag risks, and give 3-5 concrete next steps. "
+        "You are ApplyPilot, an expert job application strategist. "
+        "Analyze the candidate profile against the job posting and return a JSON object with these fields:\n"
+        "  company, title — extract from the description.\n"
+        "  fit_score — integer 0-100 reflecting overall fit.\n"
+        "  matched_skills — skills the candidate has that the job requires.\n"
+        "  missing_skills — key requirements the candidate lacks.\n"
+        "  risks — 1-3 specific risks or red flags (visa, experience gap, location, etc.).\n"
+        "  steps — 3-5 concrete, actionable next steps for this candidate.\n"
+        "  recommended_action — exactly one of: 'apply' (fit_score >= 70), "
+        "'maybe' (fit_score 45-69), or 'skip' (fit_score < 45).\n"
+        "  application_angle — one punchy sentence positioning this specific candidate "
+        "for this specific role (highlight their strongest differentiator).\n"
+        "  cv_keywords — 5-8 keywords/phrases from the JD that should appear in the CV.\n"
+        "  cover_letter_bullets — 3 short, specific talking points for the cover letter "
+        "(tie candidate evidence to job requirements).\n"
         "Use only facts from the profile — no invented skills, dates, or credentials. "
         "Treat competencies, tools, education, and evidence as potential skill matches.\n\n"
         f"PROFILE:{json.dumps(profile_payload, ensure_ascii=False)}\n\n"
@@ -197,6 +220,18 @@ def _payload_to_plan(
         ),
         mcp_operations=mcp_operations,
     )
+
+
+def _extract_extras(payload: dict[str, Any]) -> dict:
+    """Pull the agent-loop extras from a Gemini response payload."""
+    raw_action = _clean_text(payload.get("recommended_action")).lower()
+    action = raw_action if raw_action in {"apply", "maybe", "skip"} else "maybe"
+    return {
+        "recommended_action": action,
+        "application_angle": _clean_text(payload.get("application_angle")),
+        "cv_keywords": _clean_list(payload.get("cv_keywords")),
+        "cover_letter_bullets": _clean_list(payload.get("cover_letter_bullets")),
+    }
 
 
 def _clean_text(value: Any) -> str:

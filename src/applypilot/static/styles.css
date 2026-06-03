@@ -1243,3 +1243,164 @@ li {
   color: var(--text);
   border-color: var(--muted);
 }
+
+/* ─── Result badges row ─────────────────────────────────────────────────────── */
+
+.result-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+/* ─── Decision badge ────────────────────────────────────────────────────────── */
+
+.decision-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.decision-badge.hidden {
+  display: none;
+}
+
+.decision-apply {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #a5d6a7;
+}
+
+.decision-maybe {
+  background: #fff8e1;
+  color: #e65100;
+  border: 1px solid #ffcc80;
+}
+
+.decision-skip {
+  background: #fce4ec;
+  color: #c62828;
+  border: 1px solid #f48fb1;
+}
+
+.decision-badge-sm {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+/* ─── Score ring colour variants ────────────────────────────────────────────── */
+
+.score-ring.ring-apply {
+  border-top-color: #4caf50;
+}
+
+.score-ring.ring-apply span {
+  color: #2e7d32;
+}
+
+.score-ring.ring-maybe {
+  border-top-color: #ff9800;
+}
+
+.score-ring.ring-maybe span {
+  color: #e65100;
+}
+
+.score-ring.ring-skip {
+  border-top-color: #f44336;
+}
+
+.score-ring.ring-skip span {
+  color: #c62828;
+}
+
+/* ─── Application angle ─────────────────────────────────────────────────────── */
+
+.application-angle {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  font-style: italic;
+  color: var(--text);
+  padding: 10px 14px;
+  background: var(--surface-soft);
+  border-left: 3px solid var(--primary);
+  border-radius: 0 6px 6px 0;
+}
+
+/* ─── Risk list ─────────────────────────────────────────────────────────────── */
+
+.risk-list {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.risk-list li {
+  font-size: 13px;
+  color: var(--accent);
+  line-height: 1.45;
+}
+
+/* ─── Cover letter talking points ───────────────────────────────────────────── */
+
+.cover-letter-list {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cover-letter-list li {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+/* ─── Dashboard filter bar ──────────────────────────────────────────────────── */
+
+.dashboard-controls {
+  margin-bottom: 20px;
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.filter-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.filter-select {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(15, 107, 87, 0.12);
+}

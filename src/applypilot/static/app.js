@@ -2,6 +2,7 @@ const state = {
   inputMode: "url",
   lastJob: null,
   lastPlan: null,
+  allJobs: [],
 };
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -311,19 +312,33 @@ function cacheElements() {
   elements.matchedSkills = document.querySelector("#matched-skills");
   elements.missingSkills = document.querySelector("#missing-skills");
   elements.stepsList = document.querySelector("#steps-list");
-  elements.jobsList           = document.querySelector("#jobs-list");
-  elements.profileSaveStatus  = document.querySelector("#profile-save-status");
-  elements.clearProfileBtn    = document.querySelector("#clear-profile-btn");
-  elements.authOverlay        = document.querySelector("#auth-overlay");
-  elements.authEmail          = document.querySelector("#auth-email");
-  elements.authPassword       = document.querySelector("#auth-password");
-  elements.authSubmit         = document.querySelector("#auth-submit");
-  elements.authError          = document.querySelector("#auth-error");
-  elements.tabLogin           = document.querySelector("#tab-login");
-  elements.tabRegister        = document.querySelector("#tab-register");
-  elements.userInfo           = document.querySelector("#user-info");
-  elements.userEmailDisplay   = document.querySelector("#user-email-display");
-  elements.logoutBtn          = document.querySelector("#logout-btn");
+  elements.jobsList              = document.querySelector("#jobs-list");
+  elements.profileSaveStatus     = document.querySelector("#profile-save-status");
+  elements.clearProfileBtn       = document.querySelector("#clear-profile-btn");
+  elements.authOverlay           = document.querySelector("#auth-overlay");
+  elements.authEmail             = document.querySelector("#auth-email");
+  elements.authPassword          = document.querySelector("#auth-password");
+  elements.authSubmit            = document.querySelector("#auth-submit");
+  elements.authError             = document.querySelector("#auth-error");
+  elements.tabLogin              = document.querySelector("#tab-login");
+  elements.tabRegister           = document.querySelector("#tab-register");
+  elements.userInfo              = document.querySelector("#user-info");
+  elements.userEmailDisplay      = document.querySelector("#user-email-display");
+  elements.logoutBtn             = document.querySelector("#logout-btn");
+  // Agent-loop extras
+  elements.decisionBadge         = document.querySelector("#decision-badge");
+  elements.scoreRing             = document.querySelector("#score-ring");
+  elements.applicationAngleBlock = document.querySelector("#application-angle-block");
+  elements.applicationAngle      = document.querySelector("#application-angle");
+  elements.riskFlagsBlock        = document.querySelector("#risk-flags-block");
+  elements.riskFlagsList         = document.querySelector("#risk-flags-list");
+  elements.cvKeywordsBlock       = document.querySelector("#cv-keywords-block");
+  elements.cvKeywords            = document.querySelector("#cv-keywords");
+  elements.coverLetterBlock      = document.querySelector("#cover-letter-block");
+  elements.coverLetterList       = document.querySelector("#cover-letter-list");
+  // Dashboard filter / sort
+  elements.filterStatus          = document.querySelector("#filter-status");
+  elements.sortBy                = document.querySelector("#sort-by");
 }
 
 function bindEvents() {
@@ -342,6 +357,8 @@ function bindEvents() {
 
   elements.analyzeButton.addEventListener("click", analyzeJob);
   elements.saveButton.addEventListener("click", saveJob);
+  elements.filterStatus?.addEventListener("change", () => renderJobs(getFilteredJobs()));
+  elements.sortBy?.addEventListener("change", () => renderJobs(getFilteredJobs()));
 }
 
 // ---------------------------------------------------------------------------
@@ -915,7 +932,8 @@ async function loadJobs() {
     const storageLabel = { mcp: "MongoDB MCP", mongodb: "MongoDB", file: "Local file", memory: "Memory" }[body.storage] ?? body.storage;
     const heading = document.querySelector(".dashboard-heading h1");
     if (heading) heading.textContent = `Saved jobs · ${storageLabel}`;
-    renderJobs(body.jobs || []);
+    state.allJobs = body.jobs || [];
+    renderJobs(getFilteredJobs());
   } catch (error) {
     elements.jobsList.innerHTML = `<div class="empty-list">${escapeHtml(error.message)}</div>`;
   }
@@ -1049,6 +1067,69 @@ function renderAnalysis(plan) {
   renderChips(elements.matchedSkills, plan.fit.matched_skills, "Matched");
   renderChips(elements.missingSkills, plan.fit.missing_skills, "Missing", "missing");
   elements.stepsList.innerHTML = plan.steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("");
+
+  // ── Decision badge ──────────────────────────────────────────────────────────
+  const action = (plan.recommended_action || "").toLowerCase();
+  if (elements.decisionBadge) {
+    const labels = { apply: "✓ Apply", maybe: "~ Consider", skip: "✕ Skip" };
+    if (action && labels[action]) {
+      elements.decisionBadge.textContent = labels[action];
+      elements.decisionBadge.className = `decision-badge decision-${action}`;
+    } else {
+      elements.decisionBadge.className = "decision-badge hidden";
+    }
+  }
+
+  // ── Score ring colour ───────────────────────────────────────────────────────
+  if (elements.scoreRing) {
+    elements.scoreRing.className = "score-ring";
+    if (action === "apply") elements.scoreRing.classList.add("ring-apply");
+    else if (action === "skip") elements.scoreRing.classList.add("ring-skip");
+    else if (action === "maybe") elements.scoreRing.classList.add("ring-maybe");
+  }
+
+  // ── Application angle ───────────────────────────────────────────────────────
+  if (elements.applicationAngleBlock) {
+    if (plan.application_angle) {
+      elements.applicationAngle.textContent = plan.application_angle;
+      elements.applicationAngleBlock.style.display = "";
+    } else {
+      elements.applicationAngleBlock.style.display = "none";
+    }
+  }
+
+  // ── Risk flags ──────────────────────────────────────────────────────────────
+  const risks = plan.fit?.risks || [];
+  if (elements.riskFlagsBlock) {
+    if (risks.length) {
+      elements.riskFlagsList.innerHTML = risks.map((r) => `<li>${escapeHtml(r)}</li>`).join("");
+      elements.riskFlagsBlock.style.display = "";
+    } else {
+      elements.riskFlagsBlock.style.display = "none";
+    }
+  }
+
+  // ── CV keywords ─────────────────────────────────────────────────────────────
+  const cvKws = plan.cv_keywords || [];
+  if (elements.cvKeywordsBlock) {
+    if (cvKws.length) {
+      renderChips(elements.cvKeywords, cvKws, "", "cv");
+      elements.cvKeywordsBlock.style.display = "";
+    } else {
+      elements.cvKeywordsBlock.style.display = "none";
+    }
+  }
+
+  // ── Cover letter bullets ────────────────────────────────────────────────────
+  const bullets = plan.cover_letter_bullets || [];
+  if (elements.coverLetterBlock) {
+    if (bullets.length) {
+      elements.coverLetterList.innerHTML = bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join("");
+      elements.coverLetterBlock.style.display = "";
+    } else {
+      elements.coverLetterBlock.style.display = "none";
+    }
+  }
 }
 
 function jobFromPlan(originalJob, plan) {
@@ -1140,6 +1221,23 @@ function renderTimeline(job) {
   }).join("");
 }
 
+function getFilteredJobs() {
+  let jobs = [...state.allJobs];
+  const statusFilter = elements.filterStatus?.value;
+  if (statusFilter) {
+    jobs = jobs.filter((j) => (j.status || "planned") === statusFilter);
+  }
+  const sort = elements.sortBy?.value || "saved_at";
+  if (sort === "fit_score") {
+    jobs.sort((a, b) => {
+      const sa = a.analysis?.fit?.score ?? -1;
+      const sb = b.analysis?.fit?.score ?? -1;
+      return sb - sa; // highest first
+    });
+  }
+  return jobs;
+}
+
 function renderJobs(jobs) {
   if (!jobs.length) {
     elements.jobsList.innerHTML = '<div class="empty-list">No saved jobs yet.</div>';
@@ -1178,6 +1276,12 @@ function renderJobs(jobs) {
       ? `<span class="source-badge">${escapeHtml(formatSource(source))}</span>`
       : "";
 
+    const action = (analysis.recommended_action || "").toLowerCase();
+    const actionLabels = { apply: "✓ Apply", maybe: "~ Consider", skip: "✕ Skip" };
+    const decisionHtml = action && actionLabels[action]
+      ? `<span class="decision-badge decision-badge-sm decision-${action}">${actionLabels[action]}</span>`
+      : "";
+
     const statusOptions = STATUS_OPTIONS.map((opt) =>
       `<option value="${opt.value}"${status === opt.value ? " selected" : ""}>${opt.label}</option>`
     ).join("");
@@ -1192,6 +1296,7 @@ function renderJobs(jobs) {
             <h2>${escapeHtml(job.title)}</h2>
             <div class="job-card-badges">
               ${sourceBadge}
+              ${decisionHtml}
               ${savedAt ? `<span class="job-date">${escapeHtml(savedAt)}</span>` : ""}
             </div>
           </div>
